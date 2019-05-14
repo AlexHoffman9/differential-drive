@@ -23,6 +23,7 @@ import rospy
 import roslib
 from std_msgs.msg import Float32
 from geometry_msgs.msg import Twist 
+from puffer_msgs.msg import DifferentialDriveCommand
 
 #############################################################
 #############################################################
@@ -38,9 +39,9 @@ class TwistToMotors():
         rospy.loginfo("%s started" % nodename)
     
         self.w = rospy.get_param("~base_width", 0.2)
-    
-        self.pub_lmotor = rospy.Publisher('lwheel_vtarget', Float32, queue_size=10)
-        self.pub_rmotor = rospy.Publisher('rwheel_vtarget', Float32, queue_size=10)
+        # changed to match vel_cmd
+        self.pub_motor = rospy.Publisher('vel_cmd', DifferentialDriveCommand, queue_size=10)
+        #self.pub_rmotor = rospy.Publisher('rwheel_vtarget', Float32, queue_size=10)
         rospy.Subscriber('twist', Twist, self.twistCallback)
     
     
@@ -67,18 +68,23 @@ class TwistToMotors():
             idle.sleep()
                 
     #############################################################
-    def spinOnce(self):
+    def spinOnce(self): # need to fix
     #############################################################
     
         # dx = (l + r) / 2
         # dr = (r - l) / w
-            
+        # TODO need to convert meters to rad/s for PUFFER
         self.right = 1.0 * self.dx + self.dr * self.w / 2 
         self.left = 1.0 * self.dx - self.dr * self.w / 2
-        # rospy.loginfo("publishing: (%d, %d)", left, right) 
-                
-        self.pub_lmotor.publish(self.left)
-        self.pub_rmotor.publish(self.right)
+        cmds = DifferentialDriveCommand()
+        cmds.left_motor_command.header.frame_id = 'left_wheel'
+        cmds.right_motor_command.header.frame_id = 'right_wheel'
+        cmds.left_motor_command.motor_angular_velocity_rad_s = self.left
+        cmds.right_motor_command.motor_angular_velocity_rad_s = self.right
+        self.pub_motor.publish(cmds)
+        # rospy.loginfo("publishing: (%d, %d)", left, right)    #debug  
+        #self.pub_lmotor.publish(self.left) # old code
+        #self.pub_rmotor.publish(self.right) # old code
             
         self.ticks_since_target += 1
 

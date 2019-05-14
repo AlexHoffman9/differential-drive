@@ -61,6 +61,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from tf.broadcaster import TransformBroadcaster
 from std_msgs.msg import Int16
+from puffer_msgs.msg import DifferentialDriveEncoders
 
 #############################################################################
 class DiffTf:
@@ -90,24 +91,28 @@ class DiffTf:
         self.t_next = rospy.Time.now() + self.t_delta
         
         # internal data
-        self.enc_left = None        # wheel encoder readings
+        self.enc_left = None        # last wheel encoder readings
         self.enc_right = None
         self.left = 0               # actual values coming back from robot
         self.right = 0
-        self.lmult = 0
-        self.rmult = 0
-        self.prev_lencoder = 0
-        self.prev_rencoder = 0
+        #self.lmult = 0         not used because no encoder overflow
+        #self.rmult = 0
+        #self.prev_lencoder = 0 not used because no encoder overflow
+        #self.prev_rencoder = 0
         self.x = 0                  # position in xy plane 
         self.y = 0
         self.th = 0
         self.dx = 0                 # speeds in x/rotation
         self.dr = 0
         self.then = rospy.Time.now()
+        # copied from puffer_serial_driver.py to undo tick2rad conversion
+        # twice original because new firmware is for different gear ratio
+        self.tick2rad = (200 * 2 * 3.14159) / 211584
+        self.then_secs_float = 0
         
-        # subscriptions
-        rospy.Subscriber("lwheel", Int16, self.lwheelCallback)
-        rospy.Subscriber("rwheel", Int16, self.rwheelCallback)
+        # subscriptions. changed this to subscribe to "encoders". removed rwheelcallback, changed name of callback
+        rospy.Subscriber("encoders", DifferentialDriveEncoders, self.encoderCallback)
+        #rospy.Subscriber("rwheel", Int16, self.rwheelCallback)
         self.odomPub = rospy.Publisher("odom", Odometry, queue_size=10)
         self.odomBroadcaster = TransformBroadcaster()
         
@@ -134,9 +139,9 @@ class DiffTf:
                 d_left = 0
                 d_right = 0
             else:
-                d_left = (self.left - self.enc_left) / self.ticks_meter
+                d_left = (self.left - self.enc_left) / self.ticks_meter # find delta l
                 d_right = (self.right - self.enc_right) / self.ticks_meter
-            self.enc_left = self.left
+            self.enc_left = self.left # store latest readings as last
             self.enc_right = self.right
            
             # distance traveled is the average of the two wheels 
@@ -189,31 +194,49 @@ class DiffTf:
 
 
     #############################################################################
-    def lwheelCallback(self, msg):
+    def encoderCallback(self, msg):
     #############################################################################
-        enc = msg.data
-        if (enc < self.encoder_low_wrap and self.prev_lencoder > self.encoder_high_wrap):
+        # need to convert rad/s to total encoder ticks, because this package wants ticks
+        # multiply velocity times time to get change in ticks
+        now_secs_float = rospy.get_time()
+        delta_secs = now_secs_float - self.then_secs_float
+        
+        # left wheel
+        rad_s = msg.left_motor_encoder.angular_velocity_rad_s
+        delta_enc = int(rad_s*delta_secs/self.tick2rad)
+        self.left = self.left + delta_enc
+
+        # right wheel
+        rad_s = msg.right_motor_encoder.angular_velocity_rad_s
+        delta_enc =  int(rad_s*delta_secs/self.tick2rad)
+        self.right = self.right + delta_enc
+
+        self.then_secs_float = now_secs_float # update last reading time
+
+        # don't need to check overflow of encoders because I am just looking at delta of encoder, and python int doesn't overflow
+        """if (enc < self.encoder_low_wrap and self.prev_lencoder > self.encoder_high_wrap):
             self.lmult = self.lmult + 1
             
         if (enc > self.encoder_high_wrap and self.prev_lencoder < self.encoder_low_wrap):
             self.lmult = self.lmult - 1
-            
+           
         self.left = 1.0 * (enc + self.lmult * (self.encoder_max - self.encoder_min)) 
-        self.prev_lencoder = enc
+        """  
+        #self.prev_lencoder = enc
         
     #############################################################################
-    def rwheelCallback(self, msg):
+    """ def rwheelCallback(self, msg):
     #############################################################################
-        enc = msg.data
-        if(enc < self.encoder_low_wrap and self.prev_rencoder > self.encoder_high_wrap):
-            self.rmult = self.rmult + 1
+        enc = msg.data # raw encoder input
+        if(enc < self.encoder_low_wrap and self.prev_rencoder > self.encoder_high_wrap): # if encoder overflowed
+            self.rmult = self.rmult + 1 # add 1 to multiplier
         
-        if(enc > self.encoder_high_wrap and self.prev_rencoder < self.encoder_low_wrap):
-            self.rmult = self.rmult - 1
+        if(enc > self.encoder_high_wrap and self.prev_rencoder < self.encoder_low_wrap): # if encoder underflowed
+            self.rmult = self.rmult - 1 # sub 1 from multiplier
             
-        self.right = 1.0 * (enc + self.rmult * (self.encoder_max - self.encoder_min))
+        self.right = 1.0 * (enc + self.rmult * (self.encoder_max - self.encoder_min)) # calc actual encoder pos with multipliers
         self.prev_rencoder = enc
-
+ """
 #############################################################################
 #############################################################################
 if __name__ == '__main__':
