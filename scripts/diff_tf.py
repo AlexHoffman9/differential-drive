@@ -73,11 +73,13 @@ class DiffTf:
         rospy.init_node("diff_tf")
         self.nodename = rospy.get_name()
         rospy.loginfo("-I- %s started" % self.nodename)
-        
+        self.tick2rad = (100 * 2 * 3.142) / 105792
+
         #### parameters #######
         self.rate = rospy.get_param('~rate',10.0)  # the rate at which to publish the transform
-        self.ticks_meter = float(rospy.get_param('ticks_meter', 50))  # The number of wheel encoder ticks per meter of travel
-        self.base_width = float(rospy.get_param('~base_width', 0.245)) # The wheel base width in meters
+	# ticks/meter = ticks/rad * rad/meter =  1/ (radianspertick * piDrev/meter = 1/tick2rad * 2pi*.045*3.54= ratio/(100*2pi)  * 2pi *.045*3.54=ratio/100 * .159
+        self.ticks_meter = float(rospy.get_param('ticks_meter', int((.85/self.tick2rad)*1/.045))) # ticks per radian * radians per meter
+        self.base_width = float(rospy.get_param('~base_width', 0.12)) # The wheel base width in meters
         
         self.base_frame_id = rospy.get_param('~base_frame_id','base_link') # the name of the base frame of the robot
         self.odom_frame_id = rospy.get_param('~odom_frame_id', 'odom') # the name of the odometry reference frame
@@ -107,7 +109,6 @@ class DiffTf:
         self.then = rospy.Time.now()
         # copied from puffer_serial_driver.py to undo tick2rad conversion
         # twice original because new firmware is for different gear ratio
-        self.tick2rad = (200 * 2 * 3.14159) / 211584
         self.then_secs_float = 0
         
         # subscriptions. changed this to subscribe to "encoders". removed rwheelcallback, changed name of callback
