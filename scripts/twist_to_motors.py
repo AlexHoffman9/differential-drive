@@ -38,14 +38,14 @@ class TwistToMotors():
         nodename = rospy.get_name()
         rospy.loginfo("%s started" % nodename)
     
-        self.w = rospy.get_param("~base_width", 0.2)
+        self.w = rospy.get_param("~base_width", 0.12)
+        self.rad_per_m = 1/.045
         # changed to match vel_cmd
         self.pub_motor = rospy.Publisher('vel_cmd', DifferentialDriveCommand, queue_size=10)
         #self.pub_rmotor = rospy.Publisher('rwheel_vtarget', Float32, queue_size=10)
         rospy.Subscriber('twist', Twist, self.twistCallback)
     
-    
-        self.rate = rospy.get_param("~rate", 50)
+        self.rate = rospy.get_param("~rate", 10)
         self.timeout_ticks = rospy.get_param("~timeout_ticks", 2)
         self.left = 0
         self.right = 0
@@ -58,7 +58,7 @@ class TwistToMotors():
         idle = rospy.Rate(10)
         then = rospy.Time.now()
         self.ticks_since_target = self.timeout_ticks
-    
+
         ###### main loop  ######
         while not rospy.is_shutdown():
         
@@ -74,7 +74,9 @@ class TwistToMotors():
         # dx = (l + r) / 2
         # dr = (r - l) / w
         # TODO need to convert meters to rad/s for PUFFER
-        self.right = 1.0 * self.dx + self.dr * self.w / 2 
+        # in diff_tf, we converted encoder ticks to m/s
+        # 
+        self.right = 1.0 * self.dx + self.dr * self.w / 2
         self.left = 1.0 * self.dx - self.dr * self.w / 2
         cmds = DifferentialDriveCommand()
         cmds.left_motor_command.header.frame_id = 'left_wheel'
