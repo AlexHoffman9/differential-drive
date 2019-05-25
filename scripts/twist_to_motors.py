@@ -75,9 +75,9 @@ class TwistToMotors():
         # dr = (r - l) / w
         # TODO need to convert meters to rad/s for PUFFER
         # in diff_tf, we converted encoder ticks to m/s
-        # 
-        self.right = 1.0 * self.dx + self.dr * self.w / 2
-        self.left = 1.0 * self.dx - self.dr * self.w / 2
+        # just 
+        self.right = self.rad_per_m * (self.dx + self.dr * self.w / 2)
+        self.left = self.rad_per_m * (self.dx - self.dr * self.w / 2)
         cmds = DifferentialDriveCommand()
         cmds.left_motor_command.header.frame_id = 'left_wheel'
         cmds.right_motor_command.header.frame_id = 'right_wheel'
